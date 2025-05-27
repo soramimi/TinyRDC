@@ -15,7 +15,8 @@ MainWindow::MainWindow(QWidget *parent)
 	ui->setupUi(this);
 	g_mainWindow = this;
 
-	update_timer->setInterval(1);
+	// 更新間隔を16msに変更（約60FPS相当、リモートデスクトップに適した値）
+	update_timer->setInterval(16);
 	connect(update_timer, &QTimer::timeout, this, &MainWindow::onUpdateTimer);
 
 	// フォーカスポリシーの設定
@@ -100,20 +101,11 @@ void MainWindow::updateScreen()
 			int width = gdi->width;
 			int height = gdi->height;
 			int stride = gdi->stride;
-			qDebug() << Q_FUNC_INFO << width << height;
 
-			// BGRAからRGBAに変換してQImageを作成
-			QImage image(width, height, QImage::Format_RGB32);
-			for (int y = 0; y < height; y++) {
-				BYTE *src = data + y * stride;
-				QRgb *dst = (QRgb *)image.scanLine(y);
-				for (int x = 0; x < width; x++) {
-					BYTE b = src[x * 4 + 0];
-					BYTE g = src[x * 4 + 1];
-					BYTE r = src[x * 4 + 2];
-					dst[x] = qRgb(r, g, b);
-				}
-			}
+			// BGRAデータを直接Format_ARGB32として作成（これがBGRA順序）
+			QImage image(data, width, height, stride, QImage::Format_ARGB32);
+			// Format_ARGB32はBGRA順序なので、RGBを正しく表示するためにrgbSwapped()は不要
+			// むしろrgbSwapped()がRとBを逆にしていた
 
 			ui->widget_view->setImage(image);
 			ui->widget_view->update();
