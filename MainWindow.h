@@ -13,6 +13,13 @@
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/primary.h>
 
+// SIMD最適化のためのヘッダー
+#ifdef __x86_64__
+#include <immintrin.h>  // SSE/AVX
+#elif __aarch64__
+#include <arm_neon.h>   // ARM NEON
+#endif
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -46,6 +53,11 @@ private:
 	void updateScreen();
 	void updateScreenPartial();  // 部分更新メソッド
 	QVector<QRect> findDirtyRegions(const QImage &current, const QImage &previous);  // 変更領域検出
+	
+	// SIMD最適化関数
+	bool compareBlocksSIMD(const uchar *current_data, const uchar *previous_data, int width, int height, int stride);
+	bool compareBlocksSSE(const uchar *current_data, const uchar *previous_data, int width, int height, int stride);
+	bool compareBlocksNEON(const uchar *current_data, const uchar *previous_data, int width, int height, int stride);
 
 public:
 	MainWindow(QWidget *parent = nullptr);
