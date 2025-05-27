@@ -62,8 +62,8 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 	freerdp_settings_set_string(settings, FreeRDP_Username, username.toUtf8().constData());
 	freerdp_settings_set_string(settings, FreeRDP_Password, password.toUtf8().constData());
 	freerdp_settings_set_string(settings, FreeRDP_Domain, domain.toUtf8().constData());
-	freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, 1024);
-	freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, 768);
+	freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, 1920);
+	freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, 1080);
 	freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 32);
 
 	// 安全なパフォーマンス最適化設定のみ適用
