@@ -1,6 +1,7 @@
 #include "MyView.h"
 #include <QApplication>
 #include <QPainter>
+#include <QWheelEvent>
 #include <freerdp/scancode.h>
 
 MyView::MyView(QWidget *parent)
@@ -61,6 +62,49 @@ void MyView::mouseMoveEvent(QMouseEvent *event)
 	if (rdp_instance_ && rdp_instance_->context) {
 		freerdp_input_send_mouse_event(rdp_instance_->context->input, PTR_FLAGS_MOVE, event->x(), event->y());
 	}
+}
+
+void MyView::wheelEvent(QWheelEvent *event)
+{
+	if (rdp_instance_ && rdp_instance_->context) {
+		// ホイールの回転方向と量を取得
+		QPoint numDegrees = event->angleDelta() / 8;
+		QPoint numSteps = numDegrees / 15;
+		
+		// 垂直スクロール（一般的なマウスホイール）
+		if (!numSteps.y() == 0) {
+			UINT16 flags = PTR_FLAGS_WHEEL;
+			// 正の値：上スクロール、負の値：下スクロール
+			// FreeRDPのホイール値は120単位で正規化される
+			int wheel_rotation = numSteps.y() * 120;
+			
+			// ホイールの回転方向を設定
+			if (wheel_rotation > 0) {
+				flags |= PTR_FLAGS_WHEEL_NEGATIVE;  // 上スクロール
+			}
+			
+			// 絶対値を使用してホイール量を設定
+			flags |= (abs(wheel_rotation) & 0xFF) << 8;
+			
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, event->position().x(), event->position().y());
+		}
+		
+		// 水平スクロール（ホイールチルト対応）
+		if (!numSteps.x() == 0) {
+			UINT16 flags = PTR_FLAGS_HWHEEL;
+			int wheel_rotation = numSteps.x() * 120;
+			
+			if (wheel_rotation > 0) {
+				flags |= PTR_FLAGS_WHEEL_NEGATIVE;  // 右スクロール
+			}
+			
+			flags |= (abs(wheel_rotation) & 0xFF) << 8;
+			
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, event->position().x(), event->position().y());
+		}
+	}
+	
+	event->accept();
 }
 
 void MyView::keyPressEvent(QKeyEvent *event)
