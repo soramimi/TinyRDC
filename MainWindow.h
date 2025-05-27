@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QDebug>
+#include <QImage>
 #include <QInputDialog>
 #include <QMainWindow>
 #include <QMessageBox>
@@ -26,6 +27,11 @@ private:
 	rdpContext *rdp_context;
 	QTimer *update_timer;
 	bool connected;
+	
+	// 部分更新機能のための変数
+	QImage current_image;       // 現在の画像バッファ
+	QImage previous_image;      // 前回の画像（比較用）
+	bool first_update;          // 初回更新フラグ
 
 	// FreeRDPコールバック関数
 	static BOOL rdp_pre_connect(freerdp *instance);
@@ -38,6 +44,8 @@ private:
 	void doConnect(const QString &hostname, const QString &username, const QString &password, const QString &domain);
 	void doDisconnect();
 	void updateScreen();
+	void updateScreenPartial();  // 部分更新メソッド
+	QVector<QRect> findDirtyRegions(const QImage &current, const QImage &previous);  // 変更領域検出
 
 public:
 	MainWindow(QWidget *parent = nullptr);

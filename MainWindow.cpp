@@ -2,6 +2,8 @@
 #include "ui_MainWindow.h"
 #include "ConnectionDialog.h"
 
+#include <QPainter>
+
 MainWindow *g_mainWindow = nullptr;
 
 MainWindow::MainWindow(QWidget *parent)
@@ -11,6 +13,7 @@ MainWindow::MainWindow(QWidget *parent)
 	, rdp_context(nullptr)
 	, update_timer(new QTimer(this))
 	, connected(false)
+	, first_update(true)  // 初回更新フラグを初期化
 {
 	ui->setupUi(this);
 	g_mainWindow = this;
@@ -76,6 +79,9 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 	// 接続実行
 	if (freerdp_connect(rdp_instance)) {
 		connected = true;
+		first_update = true;  // 新しい接続時は初回更新フラグをリセット
+		current_image = QImage();  // 画像バッファをクリア
+		previous_image = QImage();
 		update_timer->start();
 		ui->widget_view->setRdpInstance(rdp_instance);
 		statusBar()->showMessage("Connected to " + hostname);
@@ -103,6 +109,12 @@ void MainWindow::doDisconnect()
 
 void MainWindow::updateScreen()
 {
+	// 部分更新機能を使用
+	updateScreenPartial();
+}
+
+void MainWindow::updateScreenPartial()
+{
 	if (connected && rdp_context && rdp_context->gdi) {
 		rdpGdi *gdi = rdp_context->gdi;
 		if (gdi->primary_buffer) {
@@ -111,15 +123,84 @@ void MainWindow::updateScreen()
 			int height = gdi->height;
 			int stride = gdi->stride;
 
-			// BGRAデータを直接Format_ARGB32として作成（これがBGRA順序）
-			QImage image(data, width, height, stride, QImage::Format_ARGB32);
-			// Format_ARGB32はBGRA順序なので、RGBを正しく表示するためにrgbSwapped()は不要
-			// むしろrgbSwapped()がRとBを逆にしていた
+			// 新しい画像データを作成
+			QImage new_image(data, width, height, stride, QImage::Format_ARGB32);
 
-			ui->widget_view->setImage(image);
-			ui->widget_view->update();
+			if (first_update || current_image.isNull()) {
+				// 初回更新：全画面を更新
+				current_image = new_image.copy();
+				ui->widget_view->setImage(current_image);
+				ui->widget_view->update();
+				previous_image = current_image.copy();
+				first_update = false;
+			} else {
+				// 変更された領域を検出
+				QVector<QRect> dirty_regions = findDirtyRegions(new_image, previous_image);
+				
+				if (!dirty_regions.isEmpty()) {
+					// 変更があった場合：現在の画像バッファの該当部分のみを更新
+					QPainter painter(&current_image);
+					for (const QRect &rect : dirty_regions) {
+						// 変更された領域のみをコピー
+						QImage region = new_image.copy(rect);
+						painter.drawImage(rect.topLeft(), region);
+					}
+					painter.end();
+					
+					// ビューに新しい画像を設定し、変更領域のみを再描画
+					ui->widget_view->setImage(current_image);
+					for (const QRect &rect : dirty_regions) {
+						ui->widget_view->update(rect);
+					}
+					
+					previous_image = new_image.copy();
+				}
+			}
 		}
 	}
+}
+
+QVector<QRect> MainWindow::findDirtyRegions(const QImage &current, const QImage &previous)
+{
+	QVector<QRect> dirty_regions;
+	
+	if (current.size() != previous.size()) {
+		// サイズが変わった場合は全画面更新
+		dirty_regions.append(current.rect());
+		return dirty_regions;
+	}
+	
+	const int width = current.width();
+	const int height = current.height();
+	const int block_size = 32;  // 32x32ピクセルのブロックで比較（高速化のため小さく）
+	
+	for (int y = 0; y < height; y += block_size) {
+		for (int x = 0; x < width; x += block_size) {
+			int block_width = qMin(block_size, width - x);
+			int block_height = qMin(block_size, height - y);
+			
+			// ブロック内のピクセルを効率的に比較
+			bool block_changed = false;
+			
+			// より効率的な比較：行単位でのmemcmp
+			for (int by = 0; by < block_height && !block_changed; by += 2) {  // 2行おきにサンプリング
+				int py = y + by;
+				if (py < height) {
+					const uchar *current_line = current.constScanLine(py) + (x * 4);
+					const uchar *previous_line = previous.constScanLine(py) + (x * 4);
+					if (memcmp(current_line, previous_line, block_width * 4) != 0) {
+						block_changed = true;
+					}
+				}
+			}
+			
+			if (block_changed) {
+				dirty_regions.append(QRect(x, y, block_width, block_height));
+			}
+		}
+	}
+	
+	return dirty_regions;
 }
 
 void MainWindow::on_action_connect_triggered()
