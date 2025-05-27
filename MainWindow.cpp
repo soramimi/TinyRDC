@@ -15,8 +15,7 @@ MainWindow::MainWindow(QWidget *parent)
 	ui->setupUi(this);
 	g_mainWindow = this;
 
-	// 更新間隔を16msに変更（約60FPS相当、リモートデスクトップに適した値）
-	update_timer->setInterval(16);
+	update_timer->setInterval(4);
 	connect(update_timer, &QTimer::timeout, this, &MainWindow::onUpdateTimer);
 
 	// フォーカスポリシーの設定
@@ -63,6 +62,16 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 	freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, 1024);
 	freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, 768);
 	freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 32);
+
+	// 安全なパフォーマンス最適化設定のみ適用
+	freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
+	freerdp_settings_set_bool(settings, FreeRDP_FastPathInput, TRUE);
+	freerdp_settings_set_bool(settings, FreeRDP_BitmapCacheEnabled, TRUE);
+	freerdp_settings_set_uint32(settings, FreeRDP_CompressionLevel, 2);  // 高圧縮に変更
+	freerdp_settings_set_uint32(settings, FreeRDP_OffscreenSupportLevel, 1);
+	freerdp_settings_set_uint32(settings, FreeRDP_GlyphSupportLevel, 1);
+	freerdp_settings_set_bool(settings, FreeRDP_SurfaceCommandsEnabled, TRUE);
+	freerdp_settings_set_bool(settings, FreeRDP_NetworkAutoDetect, TRUE);
 
 	// 接続実行
 	if (freerdp_connect(rdp_instance)) {
