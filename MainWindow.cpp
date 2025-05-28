@@ -8,20 +8,22 @@ MainWindow *g_mainwindow = nullptr;
 MainWindow::MainWindow(QWidget *parent)
 	: QMainWindow(parent)
 	, ui(new Ui::MainWindow)
-	, rdp_instance(nullptr)
-	, rdp_context(nullptr)
-	, update_timer(new QTimer(this))
-	, connected(false)
+	, rdp_instance_(nullptr)
+	, rdp_context_(nullptr)
+	, update_timer_(new QTimer(this))
+	, connected_(false)
 {
 	ui->setupUi(this);
 	g_mainwindow = this;
 
-	update_timer->setInterval(1);
-	connect(update_timer, &QTimer::timeout, this, &MainWindow::onUpdateTimer);
+	update_timer_->setInterval(16);
+	connect(update_timer_, &QTimer::timeout, this, &MainWindow::onUpdateTimer);
 
 	// フォーカスポリシーの設定
 	ui->widget_view->setFocusPolicy(Qt::StrongFocus);
 	setFocusPolicy(Qt::StrongFocus);
+
+	start_rdp_thread();
 }
 
 MainWindow::~MainWindow()
@@ -33,29 +35,29 @@ MainWindow::~MainWindow()
 
 void MainWindow::doConnect(const QString &hostname, const QString &username, const QString &password, const QString &domain)
 {
-	if (connected) {
+	if (connected_) {
 		doDisconnect();
 	}
 
 	// FreeRDPインスタンスの作成
-	rdp_instance = freerdp_new();
-	if (!rdp_instance) {
+	rdp_instance_ = freerdp_new();
+	if (!rdp_instance_) {
 		QMessageBox::critical(this, "Error", "Failed to create FreeRDP instance");
 		return;
 	}
 
-	freerdp_context_new(rdp_instance);
+	freerdp_context_new(rdp_instance_);
 
-	rdp_context = rdp_instance->context;
+	rdp_context_ = rdp_instance_->context;
 
 	// コールバック関数の設定
-	rdp_instance->PreConnect = rdp_pre_connect;
-	rdp_instance->PostConnect = rdp_post_connect;
-	rdp_instance->PostDisconnect = rdp_post_disconnect;
-	rdp_instance->Authenticate = rdp_authenticate;
+	rdp_instance_->PreConnect = rdp_pre_connect;
+	rdp_instance_->PostConnect = rdp_post_connect;
+	rdp_instance_->PostDisconnect = rdp_post_disconnect;
+	rdp_instance_->Authenticate = rdp_authenticate;
 
 	// 接続設定
-	rdpSettings *settings = rdp_instance->context->settings;
+	rdpSettings *settings = rdp_instance_->context->settings;
 	freerdp_settings_set_string(settings, FreeRDP_ServerHostname, hostname.toUtf8().constData());
 	freerdp_settings_set_string(settings, FreeRDP_Username, username.toUtf8().constData());
 	freerdp_settings_set_string(settings, FreeRDP_Password, password.toUtf8().constData());
@@ -75,29 +77,28 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 	freerdp_settings_set_bool(settings, FreeRDP_NetworkAutoDetect, TRUE);
 
 	// 接続実行
-	if (freerdp_connect(rdp_instance)) {
-		connected = true;
-		first_update = true;  // 新しい接続時は初回更新フラグをリセット
-		update_timer->start();
-		ui->widget_view->setRdpInstance(rdp_instance);
+	if (freerdp_connect(rdp_instance_)) {
+		connected_ = true;
+		update_timer_->start();
+		ui->widget_view->setRdpInstance(rdp_instance_);
 		statusBar()->showMessage("Connected to " + hostname);
 	} else {
 		QMessageBox::critical(this, "Error", "Failed to connect to " + hostname);
-		freerdp_free(rdp_instance);
-		rdp_instance = nullptr;
-		rdp_context = nullptr;
+		freerdp_free(rdp_instance_);
+		rdp_instance_ = nullptr;
+		rdp_context_ = nullptr;
 	}
 }
 
 void MainWindow::doDisconnect()
 {
-	if (connected && rdp_instance) {
-		update_timer->stop();
-		freerdp_disconnect(rdp_instance);
-		freerdp_free(rdp_instance);
-		rdp_instance = nullptr;
-		rdp_context = nullptr;
-		connected = false;
+	if (connected_ && rdp_instance_) {
+		update_timer_->stop();
+		freerdp_disconnect(rdp_instance_);
+		freerdp_free(rdp_instance_);
+		rdp_instance_ = nullptr;
+		rdp_context_ = nullptr;
+		connected_ = false;
 		ui->widget_view->setRdpInstance(nullptr);
 		statusBar()->showMessage("Disconnected");
 	}
@@ -105,8 +106,8 @@ void MainWindow::doDisconnect()
 
 void MainWindow::updateScreen()
 {
-	if (connected && rdp_context && rdp_context->gdi) {
-		rdpGdi *gdi = rdp_context->gdi;
+	if (connected_ && rdp_context_ && rdp_context_->gdi) {
+		rdpGdi *gdi = rdp_context_->gdi;
 		if (gdi->primary_buffer) {
 			// BYTE *data = gdi->primary_buffer;
 			// int width = gdi->width;
@@ -136,22 +137,41 @@ void MainWindow::on_action_disconnect_triggered()
 	doDisconnect();
 }
 
-void MainWindow::onUpdateTimer()
+void MainWindow::start_rdp_thread()
 {
-	if (connected && rdp_instance) {
-		// イベント処理
-		HANDLE handles[64];
-		DWORD count = freerdp_get_event_handles(rdp_context, handles, 64);
-		if (count > 0) {
-			if (WaitForMultipleObjects(count, handles, FALSE, 0) != WAIT_TIMEOUT) {
-				if (!freerdp_check_event_handles(rdp_context)) {
-					doDisconnect();
-					return;
+	rdp_thread_ = std::thread([this]() {
+		while (true) {
+			if (interrupted_) break;
+			if (rdp_instance_ && connected_) {
+				// イベント処理
+				HANDLE handles[64];
+				DWORD count = freerdp_get_event_handles(rdp_context_, handles, 64);
+				if (WaitForMultipleObjects(count, handles, FALSE, 5) == WAIT_FAILED) {
+					break;
 				}
+				if (!freerdp_check_event_handles(rdp_context_)) {
+					break;
+				}
+			} else {
+				std::this_thread::sleep_for(std::chrono::milliseconds(5));
 			}
 		}
-		updateScreen();
+		doDisconnect();
+	});
+}
+
+void MainWindow::onUpdateTimer()
+{
+	updateScreen();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+	interrupted_ = true;
+	if (rdp_thread_.joinable()) {
+		rdp_thread_.join();
 	}
+	QMainWindow::closeEvent(event);
 }
 
 // FreeRDPコールバック関数の実装

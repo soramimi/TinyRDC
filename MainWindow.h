@@ -12,6 +12,7 @@
 #include <freerdp/freerdp.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/primary.h>
+#include <thread>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -23,16 +24,16 @@ class MainWindow : public QMainWindow {
 	Q_OBJECT
 private:
 	Ui::MainWindow *ui;
-	freerdp *rdp_instance;
-	rdpContext *rdp_context;
-	QTimer *update_timer;
-	bool connected;
+	freerdp *rdp_instance_;
+	rdpContext *rdp_context_;
+	QTimer *update_timer_;
+	bool connected_;
 	int width_ = 1920;
 	int height_ = 1080;
 	QImage image_;
+	std::thread rdp_thread_;
+	bool interrupted_ = false;
 	
-	bool first_update = true;          // 初回更新フラグ
-
 	// FreeRDPコールバック関数
 	static BOOL rdp_pre_connect(freerdp *instance);
 	static BOOL rdp_post_connect(freerdp *instance);
@@ -45,6 +46,7 @@ private:
 	void doDisconnect();
 	void updateScreen();
 	BOOL onRdpPostConnect(freerdp *instance);
+	void start_rdp_thread();
 public:
 	MainWindow(QWidget *parent = nullptr);
 	~MainWindow();
@@ -53,5 +55,9 @@ private slots:
 	void on_action_connect_triggered();
 	void on_action_disconnect_triggered();
 	void onUpdateTimer();
+
+	// QWidget interface
+protected:
+	void closeEvent(QCloseEvent *event);
 };
 #endif // MAINWINDOW_H
