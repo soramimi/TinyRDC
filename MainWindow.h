@@ -13,13 +13,6 @@
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/primary.h>
 
-// SIMD最適化のためのヘッダー
-#ifdef __x86_64__
-#include <immintrin.h>  // SSE/AVX
-#elif __aarch64__
-#include <arm_neon.h>   // ARM NEON
-#endif
-
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -34,10 +27,10 @@ private:
 	rdpContext *rdp_context;
 	QTimer *update_timer;
 	bool connected;
+	int width_ = 1920;
+	int height_ = 1080;
+	QImage image_;
 	
-	// 部分更新機能のための変数
-	QImage current_image;       // 現在の画像バッファ
-	QImage previous_image;      // 前回の画像（比較用）
 	bool first_update;          // 初回更新フラグ
 
 	// FreeRDPコールバック関数
@@ -51,14 +44,7 @@ private:
 	void doConnect(const QString &hostname, const QString &username, const QString &password, const QString &domain);
 	void doDisconnect();
 	void updateScreen();
-	void updateScreenPartial();  // 部分更新メソッド
-	QVector<QRect> findDirtyRegions(const QImage &current, const QImage &previous);  // 変更領域検出
-	
-	// SIMD最適化関数
-	bool compareBlocksSIMD(const uchar *current_data, const uchar *previous_data, int width, int height, int stride);
-	bool compareBlocksSSE(const uchar *current_data, const uchar *previous_data, int width, int height, int stride);
-	bool compareBlocksNEON(const uchar *current_data, const uchar *previous_data, int width, int height, int stride);
-
+	BOOL onRdpPostConnect(freerdp *instance);
 public:
 	MainWindow(QWidget *parent = nullptr);
 	~MainWindow();

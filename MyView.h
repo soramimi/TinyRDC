@@ -11,6 +11,7 @@ class MyView : public QWidget {
 	Q_OBJECT
 private:
 	QImage image_;
+	int scale_ = 1;
 	freerdp *rdp_instance_;
 
 protected:

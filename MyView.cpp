@@ -41,7 +41,7 @@ void MyView::mousePressEvent(QMouseEvent *event)
 		UINT16 button = qtToRdpMouseButton(event->button());
 		if (button != 0) {
 			flags |= button;
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, event->x(), event->y());
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, event->x() / scale_, event->y() / scale_);
 		}
 	}
 	setFocus();
@@ -52,7 +52,7 @@ void MyView::mouseReleaseEvent(QMouseEvent *event)
 	if (rdp_instance_ && rdp_instance_->context) {
 		UINT16 button = qtToRdpMouseButton(event->button());
 		if (button != 0) {
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, button, event->x(), event->y());
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, button, event->x() / scale_, event->y() / scale_);
 		}
 	}
 }
@@ -60,47 +60,32 @@ void MyView::mouseReleaseEvent(QMouseEvent *event)
 void MyView::mouseMoveEvent(QMouseEvent *event)
 {
 	if (rdp_instance_ && rdp_instance_->context) {
-		freerdp_input_send_mouse_event(rdp_instance_->context->input, PTR_FLAGS_MOVE, event->x(), event->y());
+		freerdp_input_send_mouse_event(rdp_instance_->context->input, PTR_FLAGS_MOVE, event->x() / scale_, event->y() / scale_);
 	}
 }
 
 void MyView::wheelEvent(QWheelEvent *event)
 {
 	if (rdp_instance_ && rdp_instance_->context) {
-		// ホイールの回転方向と量を取得
-		QPoint numDegrees = event->angleDelta() / 8;
-		QPoint numSteps = numDegrees / 15;
-		
-		// 垂直スクロール（一般的なマウスホイール）
-		if (!numSteps.y() == 0) {
-			UINT16 flags = PTR_FLAGS_WHEEL;
-			// 正の値：上スクロール、負の値：下スクロール
-			// FreeRDPのホイール値は120単位で正規化される
-			int wheel_rotation = numSteps.y() * 120;
-			
-			// ホイールの回転方向を設定
-			if (wheel_rotation > 0) {
-				flags |= PTR_FLAGS_WHEEL_NEGATIVE;  // 上スクロール
+		auto delta = event->angleDelta();
+		if (delta.y() != 0) {
+			// 垂直スクロール（一般的なマウスホイール）
+			int flags = std::abs(delta.y());
+			flags = std::max(0, std::min(flags, 255));
+			flags |= PTR_FLAGS_WHEEL;
+			if (delta.y() < 0) {
+				flags |= PTR_FLAGS_WHEEL_NEGATIVE;
 			}
-			
-			// 絶対値を使用してホイール量を設定
-			flags |= (abs(wheel_rotation) & 0xFF) << 8;
-			
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, event->position().x(), event->position().y());
-		}
-		
-		// 水平スクロール（ホイールチルト対応）
-		if (!numSteps.x() == 0) {
-			UINT16 flags = PTR_FLAGS_HWHEEL;
-			int wheel_rotation = numSteps.x() * 120;
-			
-			if (wheel_rotation > 0) {
-				flags |= PTR_FLAGS_WHEEL_NEGATIVE;  // 右スクロール
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, (UINT16)flags, event->position().x() / scale_, event->position().y() / scale_);
+		} else if (delta.x() != 0) {
+			// 水平スクロール（ホイールチルト）
+			int flags = std::abs(delta.x());
+			flags = std::max(0, std::min(flags, 255));
+			flags |= PTR_FLAGS_HWHEEL;
+			if (delta.x() < 0) {
+				flags |= PTR_FLAGS_WHEEL_NEGATIVE;  // 左スクロール
 			}
-			
-			flags |= (abs(wheel_rotation) & 0xFF) << 8;
-			
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, event->position().x(), event->position().y());
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, (UINT16)flags, event->position().x() / scale_, event->position().y() / scale_);
 		}
 	}
 	
