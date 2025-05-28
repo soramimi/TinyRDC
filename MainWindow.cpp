@@ -142,17 +142,19 @@ void MainWindow::start_rdp_thread()
 	rdp_thread_ = std::thread([this]() {
 		while (true) {
 			if (interrupted_) break;
+			int count = 0;
 			if (rdp_instance_ && connected_) {
 				// イベント処理
 				HANDLE handles[64];
-				DWORD count = freerdp_get_event_handles(rdp_context_, handles, 64);
-				if (WaitForMultipleObjects(count, handles, FALSE, 5) == WAIT_FAILED) {
+				count = freerdp_get_event_handles(rdp_context_, handles, 64);
+				if (WaitForMultipleObjects(count, handles, FALSE, 100) == WAIT_FAILED) {
 					break;
 				}
 				if (!freerdp_check_event_handles(rdp_context_)) {
 					break;
 				}
-			} else {
+			}
+			if (count == 0) {
 				std::this_thread::sleep_for(std::chrono::milliseconds(5));
 			}
 		}
