@@ -31,7 +31,7 @@ private:
 	int height_ = 1080;
 	QImage image_;
 	
-	bool first_update;          // 初回更新フラグ
+	bool first_update = true;          // 初回更新フラグ
 
 	// FreeRDPコールバック関数
 	static BOOL rdp_pre_connect(freerdp *instance);

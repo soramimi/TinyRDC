@@ -12,7 +12,6 @@ MainWindow::MainWindow(QWidget *parent)
 	, rdp_context(nullptr)
 	, update_timer(new QTimer(this))
 	, connected(false)
-	, first_update(true)  // 初回更新フラグを初期化
 {
 	ui->setupUi(this);
 	g_mainwindow = this;
