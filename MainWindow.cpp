@@ -16,7 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
 	ui->setupUi(this);
 	g_mainwindow = this;
 
-	update_timer->setInterval(16);
+	update_timer->setInterval(1);
 	connect(update_timer, &QTimer::timeout, this, &MainWindow::onUpdateTimer);
 
 	// フォーカスポリシーの設定
@@ -108,10 +108,10 @@ void MainWindow::updateScreen()
 	if (connected && rdp_context && rdp_context->gdi) {
 		rdpGdi *gdi = rdp_context->gdi;
 		if (gdi->primary_buffer) {
-			BYTE *data = gdi->primary_buffer;
-			int width = gdi->width;
-			int height = gdi->height;
-			int stride = gdi->stride;
+			// BYTE *data = gdi->primary_buffer;
+			// int width = gdi->width;
+			// int height = gdi->height;
+			// int stride = gdi->stride;
 
 			ui->widget_view->setImage(image_);
 		}
