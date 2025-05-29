@@ -12,9 +12,16 @@ MyView::MyView(QWidget *parent)
 	setMouseTracking(true);
 }
 
+QPoint MyView::mapToRdp(const QPoint &pos) const
+{
+	// RDPの座標系に変換
+	return QPoint((pos.x() + offset_x_) / scale_, (pos.y() + offset_y_) / scale_);
+}
+
 void MyView::setImage(const QImage &newImage)
 {
 	image_ = newImage;
+	image_scaled_ = {};
 	update();
 }
 
@@ -30,7 +37,16 @@ void MyView::paintEvent(QPaintEvent *event)
 	if (image_.isNull()) {
 		painter.fillRect(rect(), Qt::black);
 	} else {
-		painter.drawImage(0, 0, image_, Qt::KeepAspectRatio, Qt::FastTransformation);
+		int w = image_.width();
+		int h = image_.height();
+		if (image_scaled_.width() != w || image_scaled_.height() != h) {
+			if (scale_ == 1) {
+				image_scaled_ = image_;
+			} else {
+				image_scaled_ = image_.scaled(w * scale_, h * scale_, Qt::KeepAspectRatio, Qt::FastTransformation);
+			}
+		}
+		painter.drawImage(-offset_x_, -offset_y_, image_scaled_, Qt::KeepAspectRatio, Qt::FastTransformation);
 	}
 }
 
@@ -41,7 +57,8 @@ void MyView::mousePressEvent(QMouseEvent *event)
 		UINT16 button = qtToRdpMouseButton(event->button());
 		if (button != 0) {
 			flags |= button;
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, event->x() / scale_, event->y() / scale_);
+			QPoint pos = mapToRdp(event);
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, flags, pos.x(), pos.y());
 		}
 	}
 	setFocus();
@@ -52,7 +69,8 @@ void MyView::mouseReleaseEvent(QMouseEvent *event)
 	if (rdp_instance_ && rdp_instance_->context) {
 		UINT16 button = qtToRdpMouseButton(event->button());
 		if (button != 0) {
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, button, event->x() / scale_, event->y() / scale_);
+			QPoint pos = mapToRdp(event);
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, button, pos.x(), pos.y());
 		}
 	}
 }
@@ -60,7 +78,8 @@ void MyView::mouseReleaseEvent(QMouseEvent *event)
 void MyView::mouseMoveEvent(QMouseEvent *event)
 {
 	if (rdp_instance_ && rdp_instance_->context) {
-		freerdp_input_send_mouse_event(rdp_instance_->context->input, PTR_FLAGS_MOVE, event->x() / scale_, event->y() / scale_);
+		QPoint pos = mapToRdp(event);
+		freerdp_input_send_mouse_event(rdp_instance_->context->input, PTR_FLAGS_MOVE, pos.x(), pos.y());
 	}
 }
 
@@ -68,6 +87,7 @@ void MyView::wheelEvent(QWheelEvent *event)
 {
 	if (rdp_instance_ && rdp_instance_->context) {
 		auto delta = event->angleDelta();
+		QPoint pos = mapToRdp(event);
 		if (delta.y() != 0) {
 			// 垂直スクロール（一般的なマウスホイール）
 			int flags = std::abs(delta.y());
@@ -76,7 +96,7 @@ void MyView::wheelEvent(QWheelEvent *event)
 			if (delta.y() < 0) {
 				flags |= PTR_FLAGS_WHEEL_NEGATIVE;
 			}
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, (UINT16)flags, event->position().x() / scale_, event->position().y() / scale_);
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, (UINT16)flags, pos.x(), pos.y());
 		} else if (delta.x() != 0) {
 			// 水平スクロール（ホイールチルト）
 			int flags = std::abs(delta.x());
@@ -85,31 +105,45 @@ void MyView::wheelEvent(QWheelEvent *event)
 			if (delta.x() < 0) {
 				flags |= PTR_FLAGS_WHEEL_NEGATIVE;  // 左スクロール
 			}
-			freerdp_input_send_mouse_event(rdp_instance_->context->input, (UINT16)flags, event->position().x() / scale_, event->position().y() / scale_);
+			freerdp_input_send_mouse_event(rdp_instance_->context->input, (UINT16)flags, pos.x(), pos.y());
 		}
 	}
 	
 	event->accept();
 }
 
-void MyView::keyPressEvent(QKeyEvent *event)
+bool MyView::keyPress(int key)
 {
-	if (rdp_instance_ && rdp_instance_->context) {
-		UINT16 keycode = qtToRdpKeyCode(event->key());
-		if (keycode != 0) {
+	UINT16 keycode = qtToRdpKeyCode(key);
+	if (keycode != 0) {
+		if (rdp_instance_ && rdp_instance_->context) {
 			freerdp_input_send_keyboard_event(rdp_instance_->context->input, KBD_FLAGS_DOWN, keycode);
 		}
+		return true;
 	}
+	return false;
+}
+
+bool MyView::keyRelease(int key)
+{
+	UINT16 keycode = qtToRdpKeyCode(key);
+	if (keycode != 0) {
+		if (rdp_instance_ && rdp_instance_->context) {
+			freerdp_input_send_keyboard_event(rdp_instance_->context->input, KBD_FLAGS_RELEASE, keycode);
+		}
+		return true;
+	}
+	return false;
+}
+
+void MyView::keyPressEvent(QKeyEvent *event)
+{
+	keyPress(event->key());
 }
 
 void MyView::keyReleaseEvent(QKeyEvent *event)
 {
-	if (rdp_instance_ && rdp_instance_->context) {
-		UINT16 keycode = qtToRdpKeyCode(event->key());
-		if (keycode != 0) {
-			freerdp_input_send_keyboard_event(rdp_instance_->context->input, KBD_FLAGS_RELEASE, keycode);
-		}
-	}
+	keyRelease(event->key());
 }
 
 UINT16 MyView::qtToRdpMouseButton(Qt::MouseButton button)
@@ -269,6 +303,9 @@ UINT16 MyView::qtToRdpKeyCode(int qtKey)
 		return RDP_SCANCODE_F11;
 	case Qt::Key_F12:
 		return RDP_SCANCODE_F12;
+
+	case Qt::Key_NumLock:
+		return RDP_SCANCODE_NUMLOCK;
 
 	default:
 		return 0;

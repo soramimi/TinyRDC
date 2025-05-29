@@ -2,6 +2,7 @@
 #include "ui_MainWindow.h"
 #include "ConnectionDialog.h"
 #include <QPainter>
+#include <QWindow>
 
 MainWindow *g_mainwindow = nullptr;
 
@@ -23,6 +24,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
 	ui->setupUi(this);
 	g_mainwindow = this;
+
+	qApp->installEventFilter(this);
 
 	m->update_timer.setInterval(16);
 	connect(&m->update_timer, &QTimer::timeout, this, &MainWindow::updateScreen);
@@ -137,6 +140,34 @@ void MainWindow::updateScreen()
 	}
 }
 
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+	if (event->type() == QEvent::KeyPress) {
+		QKeyEvent *e = static_cast<QKeyEvent *>(event);
+		auto k = e->key();
+		// qDebug() << k;
+		if (k == Qt::Key_F) {
+			if ((e->modifiers() & Qt::KeyboardModifierMask) == (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier)) {
+				// Ctrl+Fでフルスクリーン切り替え
+				if (isFullScreen()) {
+					menuBar()->setVisible(true);
+					statusBar()->setVisible(true);
+					showNormal();
+				} else {
+					menuBar()->setVisible(false);
+					statusBar()->setVisible(false);
+					showFullScreen();
+				}
+				return true; // イベントを処理済みとしてマーク
+			}
+		}
+	} else if (event->type() == QEvent::KeyRelease) {
+		QKeyEvent *e = static_cast<QKeyEvent *>(event);
+		auto k = e->key();
+	}
+	return false;
+}
+
 void MainWindow::on_action_connect_triggered()
 {
 	ConnectionDialog dlg;
@@ -199,6 +230,10 @@ void MainWindow::start_rdp_thread()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+	if (isFullScreen()) {
+		event->ignore();
+		return;
+	}
 	doDisconnect();
 	QMainWindow::closeEvent(event);
 }
@@ -216,6 +251,7 @@ BOOL MainWindow::onRdpPostConnect(freerdp *instance)
 	if (!gdi_init(instance, PIXEL_FORMAT_RGB24)) {
 		return FALSE;
 	}
+
 	return TRUE;
 }
 

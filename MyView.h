@@ -11,7 +11,10 @@ class MyView : public QWidget {
 	Q_OBJECT
 private:
 	QImage image_;
+	QImage image_scaled_;
 	int scale_ = 1;
+	int offset_x_ = 0;
+	int offset_y_ = 0;
 	freerdp *rdp_instance_;
 
 protected:
@@ -28,6 +31,14 @@ public:
 	void setImage(const QImage &newImage);
 	void setRdpInstance(freerdp *instance);
 
+	bool keyPress(int key);
+	bool keyRelease(int key);
+private:
+	QPoint mapToRdp(const QPoint &pos) const;
+	template <typename T> QPoint mapToRdp(T const *e) const
+	{
+		return mapToRdp(e->position().toPoint());
+	}
 private:
 	UINT16 qtToRdpKeyCode(int qtKey);
 	UINT16 qtToRdpMouseButton(Qt::MouseButton button);

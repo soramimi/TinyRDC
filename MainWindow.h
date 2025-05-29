@@ -50,5 +50,9 @@ private slots:
 	void updateScreen();
 signals:
 	void requestUpdateScreen();
+
+	// QObject interface
+public:
+	bool eventFilter(QObject *watched, QEvent *event);
 };
 #endif // MAINWINDOW_H
