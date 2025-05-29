@@ -32,8 +32,6 @@ MainWindow::MainWindow(QWidget *parent)
 	// フォーカスポリシーの設定
 	ui->widget_view->setFocusPolicy(Qt::StrongFocus);
 	setFocusPolicy(Qt::StrongFocus);
-
-	start_rdp_thread();
 }
 
 MainWindow::~MainWindow()
@@ -49,6 +47,8 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 	if (m->connected) {
 		doDisconnect();
 	}
+
+	m->interrupted = false;
 
 	// FreeRDPインスタンスの作成
 	m->rdp_instance = freerdp_new();
@@ -90,6 +90,9 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 		m->connected = true;
 		m->update_timer.start();
 		ui->widget_view->setRdpInstance(m->rdp_instance);
+
+		start_rdp_thread();
+
 		statusBar()->showMessage("Connected to " + hostname);
 	} else {
 		QMessageBox::critical(this, "Error", "Failed to connect to " + hostname);
@@ -100,19 +103,33 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 
 void MainWindow::doDisconnect()
 {
-	if (m->connected && m->rdp_instance) {
-		m->update_timer.stop();
+	ui->widget_view->setRdpInstance(nullptr);
+	m->update_timer.stop();
+
+	m->interrupted = true;
+	if (m->rdp_thread.joinable()) {
+		m->rdp_thread.join();
+	}
+
+	if (m->rdp_instance) {
 		freerdp_disconnect(m->rdp_instance);
 		freerdp_free(m->rdp_instance);
 		m->rdp_instance = nullptr;
-		m->connected = false;
-		ui->widget_view->setRdpInstance(nullptr);
-		statusBar()->showMessage("Disconnected");
 	}
+	m->connected = false;
+	statusBar()->showMessage("Disconnected");
+
+	QImage image(m->width, m->height, QImage::Format_RGB888);
+	image.fill(Qt::black);
+	m->image = image;
+	ui->widget_view->setImage(m->image);
+
 }
 
 void MainWindow::updateScreen()
 {
+	if (m->interrupted) return;
+
 	QImage image;
 	std::swap(image, m->image);
 	if (!image.isNull()) {
@@ -148,12 +165,14 @@ void MainWindow::start_rdp_thread()
 				// イベント処理
 				HANDLE handles[64];
 				count = freerdp_get_event_handles(m->rdp_instance->context, handles, 64);
-				if (WaitForMultipleObjects(count, handles, FALSE, 100) == WAIT_FAILED) {
+				auto r = WaitForMultipleObjects(count, handles, FALSE, 100);
+				if (r == WAIT_FAILED) {
 					break;
 				}
 				if (!freerdp_check_event_handles(m->rdp_instance->context)) {
 					break;
 				}
+				QImage new_image;
 				if (m->image.isNull()) {
 					rdpGdi *gdi = m->rdp_instance->context->gdi;
 					if (gdi->primary_buffer) {
@@ -161,16 +180,18 @@ void MainWindow::start_rdp_thread()
 						int width = gdi->width;
 						int height = gdi->height;
 						int stride = gdi->stride;
-						m->image = QImage(data, width, height, stride, QImage::Format_RGB888);
-						emit requestUpdateScreen();
+						new_image = QImage(data, width, height, stride, QImage::Format_RGB888);
 					}
+				}
+				if (!new_image.isNull()) {
+					m->image = new_image;
+					emit requestUpdateScreen();
 				}
 			}
 			if (count == 0) {
 				std::this_thread::sleep_for(std::chrono::milliseconds(5));
 			}
 		}
-		doDisconnect();
 	});
 }
 
@@ -178,10 +199,7 @@ void MainWindow::start_rdp_thread()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-	m->interrupted = true;
-	if (m->rdp_thread.joinable()) {
-		m->rdp_thread.join();
-	}
+	doDisconnect();
 	QMainWindow::closeEvent(event);
 }
 
