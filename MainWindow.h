@@ -24,15 +24,8 @@ class MainWindow : public QMainWindow {
 	Q_OBJECT
 private:
 	Ui::MainWindow *ui;
-	freerdp *rdp_instance_;
-	rdpContext *rdp_context_;
-	QTimer *update_timer_;
-	bool connected_;
-	int width_ = 1920;
-	int height_ = 1080;
-	QImage image_;
-	std::thread rdp_thread_;
-	bool interrupted_ = false;
+	struct Private;
+	struct Private *m;
 	
 	// FreeRDPコールバック関数
 	static BOOL rdp_pre_connect(freerdp *instance);
@@ -44,20 +37,18 @@ private:
 
 	void doConnect(const QString &hostname, const QString &username, const QString &password, const QString &domain);
 	void doDisconnect();
-	void updateScreen();
 	BOOL onRdpPostConnect(freerdp *instance);
 	void start_rdp_thread();
+protected:
+	void closeEvent(QCloseEvent *event);
 public:
 	MainWindow(QWidget *parent = nullptr);
 	~MainWindow();
-
 private slots:
 	void on_action_connect_triggered();
 	void on_action_disconnect_triggered();
-	void onUpdateTimer();
-
-	// QWidget interface
-protected:
-	void closeEvent(QCloseEvent *event);
+	void updateScreen();
+signals:
+	void requestUpdateScreen();
 };
 #endif // MAINWINDOW_H

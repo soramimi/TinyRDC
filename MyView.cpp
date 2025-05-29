@@ -27,10 +27,10 @@ void MyView::paintEvent(QPaintEvent *event)
 {
 	Q_UNUSED(event);
 	QPainter painter(this);
-	if (!image_.isNull()) {
-		painter.drawImage(0, 0, image_, Qt::KeepAspectRatio, Qt::FastTransformation);
-	} else {
+	if (image_.isNull()) {
 		painter.fillRect(rect(), Qt::black);
+	} else {
+		painter.drawImage(0, 0, image_, Qt::KeepAspectRatio, Qt::FastTransformation);
 	}
 }
 
