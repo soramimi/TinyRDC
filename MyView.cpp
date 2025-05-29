@@ -30,6 +30,18 @@ void MyView::setRdpInstance(freerdp *instance)
 	rdp_instance_ = instance;
 }
 
+int MyView::scale() const
+{
+	return scale_;
+}
+
+void MyView::setScale(int scale)
+{
+	scale_ = scale;
+	image_scaled_ = {};
+	update();
+}
+
 void MyView::paintEvent(QPaintEvent *event)
 {
 	Q_UNUSED(event);

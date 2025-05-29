@@ -31,6 +31,9 @@ public:
 	void setImage(const QImage &newImage);
 	void setRdpInstance(freerdp *instance);
 
+	int scale() const;
+	void setScale(int scale);
+
 	bool keyPress(int key);
 	bool keyRelease(int key);
 private:
