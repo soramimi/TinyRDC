@@ -143,12 +143,14 @@ void MainWindow::updateScreen()
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
 	if (watched == windowHandle()) {
-		if (event->type() == QEvent::KeyPress) {
+		if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease) {
+			bool press = (event->type() == QEvent::KeyPress);
 			QKeyEvent *e = static_cast<QKeyEvent *>(event);
-			auto k = e->key();
-			// qDebug() << k;
-			if (k == Qt::Key_F) {
-				if ((e->modifiers() & Qt::KeyboardModifierMask) == (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier)) {
+			int key = e->key();
+			Qt::KeyboardModifiers mod = e->modifiers();
+			qDebug() << Q_FUNC_INFO << QString::asprintf("%08x", key) << mod;
+			if (key == Qt::Key_F) {
+				if (press && (e->modifiers() & Qt::KeyboardModifierMask) == (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier)) {
 					// Ctrl+Fでフルスクリーン切り替え
 					if (isFullScreen()) {
 						menuBar()->setVisible(true);
@@ -161,8 +163,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 					}
 					return true; // イベントを処理済みとしてマーク
 				}
-			} else if (k == Qt::Key_D) {
-				if ((e->modifiers() & Qt::KeyboardModifierMask) == (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier)) {
+			} else if (key == Qt::Key_D) {
+				if (press && (e->modifiers() & Qt::KeyboardModifierMask) == (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier)) {
 					if (ui->widget_view->scale() == 1) {
 						ui->widget_view->setScale(2);
 					} else {
@@ -171,9 +173,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 					return true;
 				}
 			}
-		} else if (event->type() == QEvent::KeyRelease) {
-			QKeyEvent *e = static_cast<QKeyEvent *>(event);
-			auto k = e->key();
+			if (ui->widget_view->onKeyEvent(e)) return true;
 		}
 	}
 	return false;

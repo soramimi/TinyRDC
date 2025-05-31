@@ -23,8 +23,6 @@ protected:
 	void mouseReleaseEvent(QMouseEvent *event) override;
 	void mouseMoveEvent(QMouseEvent *event) override;
 	void wheelEvent(QWheelEvent *event) override;  // マウスホイールイベント追加
-	void keyPressEvent(QKeyEvent *event) override;
-	void keyReleaseEvent(QKeyEvent *event) override;
 
 public:
 	explicit MyView(QWidget *parent = nullptr);
@@ -33,9 +31,8 @@ public:
 
 	int scale() const;
 	void setScale(int scale);
-
-	bool keyPress(int key);
-	bool keyRelease(int key);
+	
+	bool onKeyEvent(QKeyEvent *event);
 private:
 	QPoint mapToRdp(const QPoint &pos) const;
 	template <typename T> QPoint mapToRdp(T const *e) const
@@ -43,7 +40,6 @@ private:
 		return mapToRdp(e->position().toPoint());
 	}
 private:
-	UINT16 qtToRdpKeyCode(int qtKey);
 	UINT16 qtToRdpMouseButton(Qt::MouseButton button);
 };
 
