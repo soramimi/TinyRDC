@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 #include "ConnectionDialog.h"
+#include "MySettings.h"
 #include <QPainter>
 #include <QWindow>
 
@@ -31,6 +32,20 @@ MainWindow::MainWindow(QWidget *parent)
 	connect(&m->update_timer, &QTimer::timeout, this, &MainWindow::updateScreen);
 
 	connect(this, &MainWindow::requestUpdateScreen, this, &MainWindow::updateScreen);
+
+	{
+		Qt::WindowStates state = windowState();
+		MySettings settings;
+
+		settings.beginGroup("MainWindow");
+		bool maximized = settings.value("Maximized").toBool();
+		restoreGeometry(settings.value("Geometry").toByteArray());
+		settings.endGroup();
+		if (maximized) {
+			state |= Qt::WindowMaximized;
+			setWindowState(state);
+		}
+	}
 
 	// フォーカスポリシーの設定
 	ui->widget_view->setFocusPolicy(Qt::StrongFocus);
@@ -245,7 +260,34 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		event->ignore();
 		return;
 	}
+
+	if (m->connected) {
+		if (QMessageBox::question(this, "Confirm Disconnect", "Are you sure you want to close Remote Desktop Client?", QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) {
+			event->ignore();
+			return;
+		}
+	}
+
 	doDisconnect();
+
+
+	{
+		MySettings settings;
+		setWindowOpacity(0);
+		Qt::WindowStates state = windowState();
+		bool maximized = (state & Qt::WindowMaximized) != 0;
+		if (maximized) {
+			state &= ~Qt::WindowMaximized;
+			setWindowState(state);
+		}
+		{
+			settings.beginGroup("MainWindow");
+			settings.setValue("Maximized", maximized);
+			settings.setValue("Geometry", saveGeometry());
+			settings.endGroup();
+		}
+	}
+
 	QMainWindow::closeEvent(event);
 }
 

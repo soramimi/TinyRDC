@@ -9,14 +9,20 @@ LIBS += -lfreerdp3 -lfreerdp-client3 -lwinpr3
 
 SOURCES += \
     ConnectionDialog.cpp \
+    Global.cpp \
+    MySettings.cpp \
     MyView.cpp \
+    joinpath.cpp \
     main.cpp \
     MainWindow.cpp
 
 HEADERS += \
     ConnectionDialog.h \
+    Global.h \
     MainWindow.h \
-    MyView.h
+    MySettings.h \
+    MyView.h \
+    joinpath.h
 
 FORMS += \
     ConnectionDialog.ui \
