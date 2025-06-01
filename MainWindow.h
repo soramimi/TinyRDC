@@ -39,20 +39,30 @@ private:
 	void doDisconnect();
 	BOOL onRdpPostConnect(freerdp *instance);
 	void start_rdp_thread();
+	void resizeDynamic(int new_width, int new_height);
+	void resizeDynamicLater();
 protected:
 	void closeEvent(QCloseEvent *event);
 public:
 	MainWindow(QWidget *parent = nullptr);
-	~MainWindow();
+	virtual ~MainWindow();
 private slots:
 	void on_action_connect_triggered();
 	void on_action_disconnect_triggered();
 	void updateScreen();
+	void resizeDynamic();
+	void on_action_view_dynamic_resolusion_toggled(bool arg1);
+
 signals:
 	void requestUpdateScreen();
 
 	// QObject interface
 public:
 	bool eventFilter(QObject *watched, QEvent *event);
+
+	bool isDynamicResizingEnabled() const;
+private slots:
+protected:
+	void resizeEvent(QResizeEvent *event);
 };
 #endif // MAINWINDOW_H

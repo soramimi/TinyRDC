@@ -48,7 +48,14 @@
     <addaction name="action_connect"/>
     <addaction name="action_disconnect"/>
    </widget>
+   <widget class="QMenu" name="menu_View">
+    <property name="title">
+     <string>&amp;View</string>
+    </property>
+    <addaction name="action_view_dynamic_resolusion"/>
+   </widget>
    <addaction name="menu_File"/>
+   <addaction name="menu_View"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="action_connect">
@@ -62,6 +69,14 @@
   <action name="action_disconnect">
    <property name="text">
     <string>&amp;Disconnect</string>
+   </property>
+  </action>
+  <action name="action_view_dynamic_resolusion">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>&amp;Dynamic Resolusion</string>
    </property>
   </action>
  </widget>

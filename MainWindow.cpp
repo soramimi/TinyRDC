@@ -16,6 +16,7 @@ struct MainWindow::Private {
 	QImage image;
 	std::thread rdp_thread;
 	bool interrupted = false;
+	int dynamic_resize_counter = 0;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -32,6 +33,7 @@ MainWindow::MainWindow(QWidget *parent)
 	connect(&m->update_timer, &QTimer::timeout, this, &MainWindow::updateScreen);
 
 	connect(this, &MainWindow::requestUpdateScreen, this, &MainWindow::updateScreen);
+
 
 	{
 		Qt::WindowStates state = windowState();
@@ -148,6 +150,14 @@ void MainWindow::updateScreen()
 {
 	if (m->interrupted) return;
 
+	if (m->dynamic_resize_counter > 0) {
+		m->dynamic_resize_counter--;
+		if (m->dynamic_resize_counter == 0) {
+			resizeDynamic();
+			return;
+		}
+	}
+
 	QImage image;
 	std::swap(image, m->image);
 	if (!image.isNull()) {
@@ -192,6 +202,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 		}
 	}
 	return false;
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+	QMainWindow::resizeEvent(event);
+	resizeDynamicLater();
 }
 
 void MainWindow::on_action_connect_triggered()
@@ -252,8 +268,6 @@ void MainWindow::start_rdp_thread()
 	});
 }
 
-
-
 void MainWindow::closeEvent(QCloseEvent *event)
 {
 	if (isFullScreen()) {
@@ -304,7 +318,9 @@ BOOL MainWindow::onRdpPostConnect(freerdp *instance)
 	if (!gdi_init(instance, PIXEL_FORMAT_RGB24)) {
 		return FALSE;
 	}
-
+	if (isDynamicResizingEnabled()) {
+		resizeDynamicLater();
+	}
 	return TRUE;
 }
 
@@ -347,3 +363,39 @@ BOOL MainWindow::rdp_end_paint(rdpContext *context)
 	}
 	return TRUE;
 }
+
+bool MainWindow::isDynamicResizingEnabled() const
+{
+	return ui->action_view_dynamic_resolusion->isChecked();
+}
+
+void MainWindow::on_action_view_dynamic_resolusion_toggled(bool arg1)
+{
+	(void)arg1;
+	if (isDynamicResizingEnabled()) {
+		resizeDynamic();
+	}
+}
+
+void MainWindow::resizeDynamicLater()
+{
+	if (isDynamicResizingEnabled()) {
+		m->dynamic_resize_counter = 30;
+	}
+}
+
+void MainWindow::resizeDynamic()
+{
+	bool enabled = isDynamicResizingEnabled();
+	if (!enabled) return;
+
+	int scale = ui->widget_view->scale();
+	int new_width = ui->widget_view->width();
+	int new_height = ui->widget_view->height();
+	new_width = std::max(new_width / scale, 640); // 最小幅
+	new_height = std::max(new_height / scale, 480); // 最小高さ
+
+	qDebug() << Q_FUNC_INFO << new_width << new_height;
+// todo: implement here
+}
+
