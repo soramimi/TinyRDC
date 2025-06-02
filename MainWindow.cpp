@@ -4,6 +4,10 @@
 #include "MySettings.h"
 #include <QPainter>
 #include <QWindow>
+#include <thread>
+#include <mutex>
+#include <freerdp/client/disp.h>
+#include <freerdp/client/cliprdr.h>
 
 MainWindow *g_mainwindow = nullptr;
 
@@ -15,6 +19,7 @@ struct MainWindow::Private {
 	int height = 1080;
 	QImage image;
 	std::thread rdp_thread;
+	std::mutex rdp_mutex;
 	bool interrupted = false;
 	int dynamic_resize_counter = 0;
 };
@@ -29,8 +34,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 	qApp->installEventFilter(this);
 
-	m->update_timer.setInterval(16);
-	connect(&m->update_timer, &QTimer::timeout, this, &MainWindow::updateScreen);
+	connect(&m->update_timer, &QTimer::timeout, this, &MainWindow::onIntervalTimer);
+	m->update_timer.setInterval(10);
+	m->update_timer.start();
 
 	connect(this, &MainWindow::requestUpdateScreen, this, &MainWindow::updateScreen);
 
@@ -146,9 +152,10 @@ void MainWindow::doDisconnect()
 
 }
 
-void MainWindow::updateScreen()
+void MainWindow::onIntervalTimer()
 {
 	if (m->interrupted) return;
+	if (!m->connected) return;
 
 	if (m->dynamic_resize_counter > 0) {
 		m->dynamic_resize_counter--;
@@ -157,6 +164,12 @@ void MainWindow::updateScreen()
 			return;
 		}
 	}
+}
+
+void MainWindow::updateScreen()
+{
+	if (m->interrupted) return;
+	if (!m->connected) return;
 
 	QImage image;
 	std::swap(image, m->image);
@@ -201,6 +214,13 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 			if (ui->widget_view->onKeyEvent(e)) return true;
 		}
 	}
+#if 0
+	if (event->type() == QEvent::ShortcutOverride) {
+		qDebug() << event->type() << "ShortcutOverride";
+		event->accept();
+		return true;
+	}
+#endif
 	return false;
 }
 
@@ -247,12 +267,14 @@ void MainWindow::start_rdp_thread()
 				}
 				QImage new_image;
 				if (m->image.isNull()) {
+					std::lock_guard lock(m->rdp_mutex);
 					rdpGdi *gdi = m->rdp_instance->context->gdi;
 					if (gdi->primary_buffer) {
 						BYTE *data = gdi->primary_buffer;
 						int width = gdi->width;
 						int height = gdi->height;
 						int stride = gdi->stride;
+						qDebug() << "thread" << width << height;
 						new_image = QImage(data, width, height, stride, QImage::Format_RGB888);
 					}
 				}
@@ -283,7 +305,6 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	}
 
 	doDisconnect();
-
 
 	{
 		MySettings settings;
@@ -380,22 +401,28 @@ void MainWindow::on_action_view_dynamic_resolusion_toggled(bool arg1)
 void MainWindow::resizeDynamicLater()
 {
 	if (isDynamicResizingEnabled()) {
-		m->dynamic_resize_counter = 30;
+		m->dynamic_resize_counter = 50;
 	}
 }
 
 void MainWindow::resizeDynamic()
 {
+	if (m->interrupted) return;
+	if (!m->connected) return;
+
 	bool enabled = isDynamicResizingEnabled();
 	if (!enabled) return;
 
 	int scale = ui->widget_view->scale();
-	int new_width = ui->widget_view->width();
-	int new_height = ui->widget_view->height();
-	new_width = std::max(new_width / scale, 640); // 最小幅
-	new_height = std::max(new_height / scale, 480); // 最小高さ
-
-	qDebug() << Q_FUNC_INFO << new_width << new_height;
-// todo: implement here
+	int w = ui->widget_view->width();
+	int h = ui->widget_view->height();
+	{
+		std::lock_guard<std::mutex> lock(m->rdp_mutex);
+		rdpGdi *gdi = m->rdp_instance->context->gdi;
+		int w = std::max(w / scale, 640);
+		int h = std::max(h / scale, 480);
+		qDebug() << "resize" << w << h;
+		gdi_resize(gdi, w, h);
+	}
 }
 

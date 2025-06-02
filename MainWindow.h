@@ -62,6 +62,7 @@ public:
 
 	bool isDynamicResizingEnabled() const;
 private slots:
+	void onIntervalTimer();
 protected:
 	void resizeEvent(QResizeEvent *event);
 };
