@@ -1,12 +1,12 @@
-# TinyRDC 仕様書
+# Rapsodia 仕様書
 
 ## 概要
 
-TinyRDCは、Qt6とFreeRDPライブラリを使用したシンプルで軽量なリモートデスクトップクライアントアプリケーションです。WindowsマシンへのRDP接続を提供し、基本的なリモートデスクトップ操作を可能にします。
+Rapsodiaは、Qt6とFreeRDPライブラリを使用したシンプルで軽量なリモートデスクトップクライアントアプリケーションです。WindowsマシンへのRDP接続を提供し、基本的なリモートデスクトップ操作を可能にします。
 
 ## 基本情報
 
-- **プロジェクト名**: TinyRDC (実際のアプリケーション名: TonyRDC)
+- **プロジェクト名**: Rapsodia
 - **開発者**: soramimi.jp
 - **プログラミング言語**: C++17
 - **GUIフレームワーク**: Qt 6.9.0
@@ -149,7 +149,7 @@ ConnectionDialog.ui   - 接続ダイアログレイアウト
 
 ### 設定ファイル
 ```
-TinyRDC.pro          - qmakeプロジェクトファイル
+Rapsodia.pro          - qmakeプロジェクトファイル
 ```
 
 ## ビルド仕様
@@ -157,17 +157,17 @@ TinyRDC.pro          - qmakeプロジェクトファイル
 ### ビルド設定
 - **コンパイラ**: C++17対応
 - **Qt設定**: core gui widgets
-- **出力**: TinyRDC実行ファイル
+- **出力**: Rapsodia実行ファイル
 
 ### ビルドコマンド
 ```bash
-qmake TinyRDC.pro
+qmake Rapsodia.pro
 make
 ```
 
 ### ビルド成果物
-- **Debug**: build/Qt_6_9_0-Debug/TinyRDC
-- **Release**: build/Qt_6_9_0-Release/TinyRDC
+- **Debug**: build/Qt_6_9_0-Debug/Rapsodia
+- **Release**: build/Qt_6_9_0-Release/Rapsodia
 
 ## 設定仕様
 

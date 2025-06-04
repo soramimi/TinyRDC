@@ -1,4 +1,4 @@
-TARGET = TinyRDC
+TARGET = Rapsodia
 QT += core gui widgets
 CONFIG += c++17
 
