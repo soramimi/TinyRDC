@@ -45,7 +45,7 @@ private:
 	void doDisconnect();
 	BOOL onRdpPostConnect(freerdp *instance);
 	void start_rdp_thread();
-	void resizeDynamic(int new_width, int new_height);
+	void resizeDynamic();
 	void resizeDynamicLater();
 	static void channelConnected(void *context, const ChannelConnectedEventArgs *e);
 	static void channelDisconnected(void *context, const ChannelDisconnectedEventArgs *e);
@@ -55,6 +55,8 @@ private:
 	static UINT onDisplayControlCaps(DispClientContext *disp, UINT32 maxNumMonitors, UINT32 maxMonitorAreaFactorA, UINT32 maxMonitorAreaFactorB);
 	rdpGdi *rdp_gdi();
 	rdpSettings *rdp_settings();
+	QSize newSize() const;
+	void setDefaultWindowTitle();
 protected:
 	void closeEvent(QCloseEvent *event);
 public:
@@ -65,7 +67,6 @@ private slots:
 	void on_action_disconnect_triggered();
 	void updateScreen();
 	void updateScreen2(const QImage &image, const QRect &rect);
-	void resizeDynamic();
 	void on_action_view_dynamic_resolution_toggled(bool arg1);
 
 signals:

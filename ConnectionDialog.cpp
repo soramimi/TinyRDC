@@ -6,15 +6,27 @@ ConnectionDialog::ConnectionDialog(QWidget *parent)
 	, ui(new Ui::ConnectionDialog)
 {
 	ui->setupUi(this);
-
-	ui->lineEdit_host->setText("192.168.0.20");
-	ui->lineEdit_domain->setText("WORKGROUP");
-	ui->lineEdit_username->setFocus();
 }
 
 ConnectionDialog::~ConnectionDialog()
 {
 	delete ui;
+}
+
+void ConnectionDialog::setCredential(const Credential &cred)
+{
+	ui->lineEdit_host->setText(cred.hostname);
+	ui->lineEdit_domain->setText(cred.domain);
+	ui->lineEdit_username->setText(cred.username);
+	ui->lineEdit_password->setText(cred.password);
+
+	if (ui->lineEdit_host->text().isEmpty()) {
+		ui->lineEdit_host->setFocus();
+	} else if (ui->lineEdit_username->text().isEmpty()) {
+		ui->lineEdit_username->setFocus();
+	} else if (ui->lineEdit_password->text().isEmpty()) {
+		ui->lineEdit_password->setFocus();
+	}
 }
 
 QString ConnectionDialog::hostname() const

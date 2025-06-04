@@ -29,6 +29,17 @@ void MyView::setImage(const QImage &image, QRect const &rect)
 		pr.drawImage(rect, image, rect);
 	}
 	image_scaled_ = {};
+	layoutView();
+}
+
+void MyView::layoutView()
+{
+	int w = image_.width() * scale_;
+	int h = image_.height() * scale_;
+	int x = (w > width()) ? 0 : (width() - w) / 2;
+	int y = (h > height()) ? (height() - h) : (height() - h) / 2;
+	offset_x_ = -x;
+	offset_y_ = -y;
 	update();
 }
 
@@ -53,19 +64,29 @@ void MyView::paintEvent(QPaintEvent *event)
 {
 	Q_UNUSED(event);
 	QPainter painter(this);
-	if (image_.isNull()) {
-		painter.fillRect(rect(), Qt::black);
-	} else {
-		int w = image_.width();
-		int h = image_.height();
-		if (image_scaled_.width() != w || image_scaled_.height() != h) {
+	painter.fillRect(rect(), QColor(192, 192, 192));
+	if (!image_.isNull()) {
+		if (image_.size() != image_scaled_.size()) {
 			if (scale_ == 1) {
 				image_scaled_ = image_;
 			} else {
-				image_scaled_ = image_.scaled(w * scale_, h * scale_, Qt::KeepAspectRatio, Qt::FastTransformation);
+				int w = image_.width() * scale_;
+				int h = image_.height() * scale_;
+				image_scaled_ = image_.scaled(w, h, Qt::KeepAspectRatio, Qt::FastTransformation);
 			}
 		}
-		painter.drawImage(-offset_x_, -offset_y_, image_scaled_, Qt::KeepAspectRatio, Qt::FastTransformation);
+		int x = -offset_x_;
+		int y = -offset_y_;
+		int w = image_scaled_.width();
+		int h = image_scaled_.height();
+		{
+			painter.fillRect(x - 1, y - 1, w + 2, h + 2, Qt::black);
+			painter.fillRect(x - 2, y - 2, w + 2, 1, QColor(128, 128, 128));
+			painter.fillRect(x - 2, y - 2, 1, h + 2, QColor(128, 128, 128));
+			painter.fillRect(x, y + h + 1, w + 2, 1, QColor(255, 255, 255));
+			painter.fillRect(x + w + 1, y, 1, h + 2, QColor(255, 255, 255));
+		}
+		painter.drawImage(x, y, image_scaled_, Qt::KeepAspectRatio, Qt::FastTransformation);
 	}
 }
 
@@ -110,7 +131,7 @@ void MyView::wheelEvent(QWheelEvent *event)
 		if (delta.y() != 0) {
 			// 垂直スクロール（一般的なマウスホイール）
 			int flags = std::abs(delta.y());
-			flags = std::max(0, std::min(flags, 255));
+			flags = std::clamp(flags, 0, 255);
 			flags |= PTR_FLAGS_WHEEL;
 			if (delta.y() < 0) {
 				flags |= PTR_FLAGS_WHEEL_NEGATIVE;
@@ -119,7 +140,7 @@ void MyView::wheelEvent(QWheelEvent *event)
 		} else if (delta.x() != 0) {
 			// 水平スクロール（ホイールチルト）
 			int flags = std::abs(delta.x());
-			flags = std::max(0, std::min(flags, 255));
+			flags = std::clamp(flags, 0, 255);
 			flags |= PTR_FLAGS_HWHEEL;
 			if (delta.x() < 0) {
 				flags |= PTR_FLAGS_WHEEL_NEGATIVE;  // 左スクロール

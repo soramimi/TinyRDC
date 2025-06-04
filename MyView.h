@@ -27,11 +27,13 @@ protected:
 
 public:
 	explicit MyView(QWidget *parent = nullptr);
-        void setImage(const QImage &image, const QRect &rect);
+	void setImage(const QImage &image, const QRect &rect);
 	void setRdpInstance(freerdp *instance);
 
 	int scale() const;
 	void setScale(int scale);
+
+	void layoutView();
 	
 	bool onKeyEvent(QKeyEvent *event);
 private:

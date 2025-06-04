@@ -5,7 +5,6 @@
 #include <QPainter>
 #include <QWindow>
 #include <thread>
-#include <mutex>
 #include "Global.h"
 
 struct MyClientContext {
@@ -20,7 +19,7 @@ public:
 		V1,
 		V2,
 	};
-#if 0
+#if 1
 	Version version() { return V1; }
 
 	freerdp *rdp = nullptr;
@@ -106,21 +105,25 @@ struct MainWindow::Private {
 	Session session;
 	QTimer update_timer;
 	bool connected = false;
-	int width = 1280;
-	int height = 720;
-	QImage image;
+	QSize size { 1920, 1080 };
 	std::thread rdp_thread;
-	std::mutex rdp_mutex;
 	bool interrupted = false;
 	int dynamic_resize_counter = 0;
+
+	constexpr static UINT32 rdp_pixel_format = PIXEL_FORMAT_RGBX32;
+	constexpr static QImage::Format screen_image_foramt = QImage::Format_RGBX8888;
+
+	QImage screen_image;
 };
 
 MainWindow::MainWindow(QWidget *parent)
 	: QMainWindow(parent)
-	, m(new Private)
 	, ui(new Ui::MainWindow)
+	, m(new Private)
 {
 	ui->setupUi(this);
+
+	setDefaultWindowTitle();
 
 	qApp->installEventFilter(this);
 
@@ -156,6 +159,12 @@ MainWindow::~MainWindow()
 	delete ui;
 }
 
+void MainWindow::setDefaultWindowTitle()
+{
+	QString title = "Rapsodia - Remote Desktop Client";
+	setWindowTitle(title);
+}
+
 freerdp *MainWindow::rdp_instance()
 {
 	return m->session.rdp_instance();
@@ -176,6 +185,16 @@ rdpGdi *MainWindow::rdp_gdi()
 	return m->session.rdp_gdi();
 }
 
+QSize MainWindow::newSize() const
+{
+	int scale = ui->widget_view->scale();
+	int w = ui->widget_view->width() / scale;
+	int h = ui->widget_view->height() / scale;
+	w = std::clamp(w, DISPLAY_CONTROL_MIN_MONITOR_WIDTH, DISPLAY_CONTROL_MAX_MONITOR_WIDTH);
+	h = std::clamp(h, DISPLAY_CONTROL_MIN_MONITOR_HEIGHT, DISPLAY_CONTROL_MAX_MONITOR_HEIGHT);
+	return {w, h};
+}
+
 void MainWindow::doConnect(const QString &hostname, const QString &username, const QString &password, const QString &domain)
 {
 	if (m->connected) {
@@ -184,12 +203,7 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 
 	// 動的解像度が有効な場合は、現在のビューサイズに合わせる
 	if (isDynamicResizingEnabled()) {
-		int scale = ui->widget_view->scale();
-		int w = ui->widget_view->width();
-		int h = ui->widget_view->height();
-		m->width = std::clamp(w / scale, DISPLAY_CONTROL_MIN_MONITOR_WIDTH, DISPLAY_CONTROL_MAX_MONITOR_WIDTH);
-		m->height = std::clamp(h / scale, DISPLAY_CONTROL_MIN_MONITOR_HEIGHT, DISPLAY_CONTROL_MAX_MONITOR_HEIGHT);
-		qDebug() << "Initial size for dynamic resolution:" << m->width << "x" << m->height;
+		m->size = newSize();
 	}
 
 	m->interrupted = false;
@@ -208,8 +222,8 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 	freerdp_settings_set_string(settings, FreeRDP_Username, username.toUtf8().constData());
 	freerdp_settings_set_string(settings, FreeRDP_Password, password.toUtf8().constData());
 	freerdp_settings_set_string(settings, FreeRDP_Domain, domain.toUtf8().constData());
-	freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, m->width);
-	freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, m->height);
+	freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, m->size.width());
+	freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, m->size.height());
 
 	if (m->session.version() == Session::V2) {
 		// Display拡張を有効化（動的解像度変更のため）
@@ -245,6 +259,9 @@ void MainWindow::doConnect(const QString &hostname, const QString &username, con
 		start_rdp_thread();
 
 		statusBar()->showMessage("Connected to " + hostname);
+
+		QString title = hostname + " - Rapsodia";
+		setWindowTitle(title);
 	} else {
 		QMessageBox::critical(this, "Error", "Failed to connect to " + hostname);
 		m->session.context_free();
@@ -268,14 +285,15 @@ void MainWindow::doDisconnect()
 	m->connected = false;
 	statusBar()->showMessage("Disconnected");
 
-	QImage image(m->width, m->height, QImage::Format_RGBX8888);
+	QImage image(m->size.width(), m->size.height(), QImage::Format_RGBX8888);
 	image.fill(Qt::black);
-	m->image = image;
+	m->screen_image = image;
 	if (m->session.version() == Session::V2) {
 		image = image.copy();
 	}
 	ui->widget_view->setImage(image, QRect{});
 
+	setDefaultWindowTitle();
 }
 
 void MainWindow::onIntervalTimer()
@@ -298,10 +316,9 @@ void MainWindow::updateScreen()
 	if (!m->connected) return;
 
 	QImage image;
-	std::swap(image, m->image);
+	std::swap(image, m->screen_image);
 	if (!image.isNull()) {
 		if (m->session.version() == Session::V1) {
-			qDebug() << Q_FUNC_INFO;
 			ui->widget_view->setImage(image, QRect{});
 		}
 	}
@@ -314,7 +331,6 @@ void MainWindow::updateScreen2(QImage const &image, QRect const &rect)
 
 	if (!image.isNull()) {
 		if (m->session.version() == Session::V2) {
-			qDebug() << Q_FUNC_INFO;
 			ui->widget_view->setImage(image, rect);
 		}
 	}
@@ -372,17 +388,32 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
 	QMainWindow::resizeEvent(event);
+	ui->widget_view->layoutView();
 	resizeDynamicLater();
 }
 
 void MainWindow::on_action_connect_triggered()
 {
+	MySettings settings;
+	settings.beginGroup("Connection");
+
+	ConnectionDialog::Credential cred;
+	cred.hostname = settings.value("Hostname", QString()).toString();
+	cred.username = settings.value("Username", QString()).toString();
+	cred.password = {};
+	cred.domain = settings.value("Domain", "WORKGROUP").toString();
+
 	ConnectionDialog dlg;
+	dlg.setCredential(cred);
 	if (dlg.exec() == QDialog::Accepted) {
 		QString hostname = dlg.hostname();
 		QString username = dlg.username();
 		QString password = dlg.password();
 		QString domain = dlg.domain();
+		settings.setValue("Hostname", hostname);
+		settings.setValue("Username", username);
+		settings.setValue("Domain", domain);
+		// settings.setValue("Password", password); // パスワードは保存しない方が良いかもしれません
 		doConnect(hostname, username, password, domain);
 		return;
 	}
@@ -412,8 +443,7 @@ void MainWindow::start_rdp_thread()
 				}
 				if (m->session.version() == Session::V1) {
 					QImage new_image;
-					if (m->image.isNull()) {
-						std::lock_guard lock(m->rdp_mutex);
+					if (m->screen_image.isNull()) {
 						auto *gdi = rdp_gdi();
 						if (gdi->primary_buffer) {
 							BYTE *data = gdi->primary_buffer;
@@ -424,7 +454,7 @@ void MainWindow::start_rdp_thread()
 						}
 					}
 					if (!new_image.isNull()) {
-						m->image = new_image;
+						m->screen_image = new_image;
 						emit requestUpdateScreen();
 					}
 				}
@@ -485,12 +515,12 @@ BOOL MainWindow::rdp_pre_connect(freerdp *rdp)
 BOOL MainWindow::onRdpPostConnect(freerdp *rdp)
 {
 	if (m->session.version() == Session::V1) {
-		if (!gdi_init(rdp, PIXEL_FORMAT_RGBX32)) {
+		if (!gdi_init(rdp, m->rdp_pixel_format)) {
 			return FALSE;
 		}
 	} else if (m->session.version() == Session::V2) {
-		m->image = QImage(m->width, m->height, QImage::Format_RGBX8888);
-		if (!gdi_init_ex(rdp, PIXEL_FORMAT_RGBX32, m->image.bytesPerLine(), m->image.bits(), nullptr)) {
+		m->screen_image = QImage(m->size.width(), m->size.height(), QImage::Format_RGBX8888);
+		if (!gdi_init_ex(rdp, m->rdp_pixel_format, m->screen_image.bytesPerLine(), m->screen_image.bits(), nullptr)) {
 			return FALSE;
 		}
 		if (isDynamicResizingEnabled()) {
@@ -515,16 +545,16 @@ void MainWindow::rdp_post_disconnect(freerdp *instance)
 
 BOOL MainWindow::rdp_authenticate(freerdp *instance, char **username, char **password, char **domain)
 {
-	Q_UNUSED(instance);
-	Q_UNUSED(username);
-	Q_UNUSED(password);
-	Q_UNUSED(domain);
+	(void)instance;
+	(void)username;
+	(void)password;
+	(void)domain;
 	return TRUE;
 }
 
 BOOL MainWindow::rdp_begin_paint(rdpContext *context)
 {
-	Q_UNUSED(context);
+	(void)context;
 	return TRUE;
 }
 
@@ -538,7 +568,7 @@ BOOL MainWindow::rdp_end_paint(rdpContext *context)
 	auto invalid = gdi->primary->hdc->hwnd->invalid;
 	QRect rect(invalid->x, invalid->y, invalid->w, invalid->h);
 
-	self->updateScreen2(self->m->image, rect);
+	self->updateScreen2(self->m->screen_image, rect);
 
 	return TRUE;
 }
@@ -558,51 +588,7 @@ void MainWindow::on_action_view_dynamic_resolution_toggled(bool arg1)
 
 void MainWindow::resizeDynamicLater()
 {
-	if (isDynamicResizingEnabled()) {
-		m->dynamic_resize_counter = 50;
-	}
-}
-
-void MainWindow::resizeDynamic(int new_width, int new_height)
-{
-	if (!rdp_instance() || !rdp_instance()->context) return;
-
-	auto *settings = rdp_settings();
-	auto *disp = disp_client_context();
-	if (settings && disp && disp->DisplayControlCaps) {
-		qDebug() << Q_FUNC_INFO;
-		std::lock_guard lock(m->rdp_mutex);
-
-		DISPLAY_CONTROL_MONITOR_LAYOUT layout = { 0 };
-		layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
-		layout.Left = 0;
-		layout.Top = 0;
-		layout.Width = new_width;
-		layout.Height = new_height;
-		layout.PhysicalWidth = new_width;
-		layout.PhysicalHeight = new_height;
-		layout.Orientation = freerdp_settings_get_uint16(settings, FreeRDP_DesktopOrientation);
-		layout.DesktopScaleFactor = freerdp_settings_get_uint32(settings, FreeRDP_DesktopScaleFactor);
-		layout.DeviceScaleFactor = freerdp_settings_get_uint32(settings, FreeRDP_DeviceScaleFactor);
-
-		disp->SendMonitorLayout(disp, 1, &layout);
-
-		freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, new_width);
-		freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, new_height);
-
-		auto gdi = rdp_gdi();
-		if (gdi) {
-			if (m->session.version() == Session::V1) {
-				gdi_resize(gdi, new_width, new_height);
-			} else if (m->session.version() == Session::V2) {
-				m->image = QImage(new_width, new_height, QImage::Format_RGBX8888);
-				gdi_resize_ex(gdi, new_width, new_height, m->image.bytesPerLine(), PIXEL_FORMAT_RGBX32, m->image.bits(), nullptr);
-			}
-		}
-
-		m->width = new_width;
-		m->height = new_height;
-	}
+	m->dynamic_resize_counter = isDynamicResizingEnabled() ? 50 : 0;
 }
 
 void MainWindow::resizeDynamic()
@@ -610,20 +596,43 @@ void MainWindow::resizeDynamic()
 	if (m->interrupted) return;
 	if (!m->connected) return;
 	if (!rdp_instance()) return;
-	if (!isDynamicResizingEnabled()) return;
+	if (isDynamicResizingEnabled()) {
+		auto size = newSize();
+		if (size != m->size) {
+			m->size = size;
+			auto *settings = rdp_settings();
+			auto *disp = disp_client_context();
+			if (settings && disp && disp->DisplayControlCaps) {
+				DISPLAY_CONTROL_MONITOR_LAYOUT layout = { 0 };
+				layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
+				layout.Left = 0;
+				layout.Top = 0;
+				layout.Width = m->size.width();
+				layout.Height = m->size.height();
+				layout.PhysicalWidth = m->size.width();
+				layout.PhysicalHeight = m->size.height();
+				layout.Orientation = freerdp_settings_get_uint16(settings, FreeRDP_DesktopOrientation);
+				layout.DesktopScaleFactor = freerdp_settings_get_uint32(settings, FreeRDP_DesktopScaleFactor);
+				layout.DeviceScaleFactor = freerdp_settings_get_uint32(settings, FreeRDP_DeviceScaleFactor);
 
-	int w = ui->widget_view->width();
-	int h = ui->widget_view->height();
-	
-	int scale = ui->widget_view->scale();
-	w = std::clamp(w / scale, DISPLAY_CONTROL_MIN_MONITOR_WIDTH, DISPLAY_CONTROL_MAX_MONITOR_WIDTH);
-	h = std::clamp(h / scale, DISPLAY_CONTROL_MIN_MONITOR_HEIGHT, DISPLAY_CONTROL_MAX_MONITOR_HEIGHT);
-	if (w == m->width && h == m->height) return;
-	
-	m->width = w;
-	m->height = h;
-	
-	resizeDynamic(w, h);
+				disp->SendMonitorLayout(disp, 1, &layout);
+
+				freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, m->size.width());
+				freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, m->size.height());
+
+				auto gdi = rdp_gdi();
+				if (gdi) {
+					if (m->session.version() == Session::V1) {
+						gdi_resize(gdi, m->size.width(), m->size.height());
+					} else if (m->session.version() == Session::V2) {
+						m->screen_image = QImage(m->size, QImage::Format_RGBX8888);
+						gdi_resize_ex(gdi, m->size.width(), m->size.height(), m->screen_image.bytesPerLine(), m->rdp_pixel_format, m->screen_image.bits(), nullptr);
+					}
+				}
+			}
+		}
+	}
+	ui->widget_view->layoutView();
 }
 
 void MainWindow::channelConnected(void *context, const ChannelConnectedEventArgs *e)
