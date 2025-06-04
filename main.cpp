@@ -9,7 +9,7 @@ ApplicationGlobal *global;
 
 int main(int argc, char *argv[])
 {
-	putenv("QT_ASSUME_STDERR_HAS_CONSOLE=1");
+	qputenv("QT_ASSUME_STDERR_HAS_CONSOLE", "1");
 
 	ApplicationGlobal g;
 	global = &g;
@@ -22,7 +22,10 @@ int main(int argc, char *argv[])
 	global->config_file_path = joinpath(global->app_config_dir, global->application_name + ".ini");
 
 	QApplication a(argc, argv);
+
 	MainWindow w;
+	global->mainwindow = &w;
+
 	w.show();
 	return a.exec();
 }

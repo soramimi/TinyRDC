@@ -52,7 +52,7 @@
     <property name="title">
      <string>&amp;View</string>
     </property>
-    <addaction name="action_view_dynamic_resolusion"/>
+    <addaction name="action_view_dynamic_resolution"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menu_View"/>
@@ -71,12 +71,12 @@
     <string>&amp;Disconnect</string>
    </property>
   </action>
-  <action name="action_view_dynamic_resolusion">
+  <action name="action_view_dynamic_resolution">
    <property name="checkable">
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>&amp;Dynamic Resolusion</string>
+    <string>&amp;Dynamic Resolution</string>
    </property>
   </action>
  </widget>

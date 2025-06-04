@@ -6,6 +6,8 @@
 #define ORGANIZATION_NAME "soramimi.jp"
 #define APPLICATION_NAME "TonyRDC"
 
+class MainWindow;
+
 class ApplicationSettings {
 public:
 };
@@ -21,6 +23,8 @@ public:
 };
 
 class ApplicationGlobal : public ApplicationBasicData {
+public:
+	MainWindow *mainwindow = nullptr;
 };
 
 extern ApplicationGlobal *global;

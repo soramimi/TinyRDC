@@ -18,9 +18,16 @@ QPoint MyView::mapToRdp(const QPoint &pos) const
 	return QPoint((pos.x() + offset_x_) / scale_, (pos.y() + offset_y_) / scale_);
 }
 
-void MyView::setImage(const QImage &newImage)
+void MyView::setImage(const QImage &image, QRect const &rect)
 {
-	image_ = newImage;
+	if (rect.isNull()) {
+		image_ = image;
+	} else if (image_.size() != image.size()) {
+		image_ = image.copy();
+	} else {
+		QPainter pr(&image_);
+		pr.drawImage(rect, image, rect);
+	}
 	image_scaled_ = {};
 	update();
 }

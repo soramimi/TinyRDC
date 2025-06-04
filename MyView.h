@@ -6,6 +6,7 @@
 #include <QWidget>
 #include <freerdp/freerdp.h>
 #include <freerdp/input.h>
+#include <type_traits>
 
 class MyView : public QWidget {
 	Q_OBJECT
@@ -26,7 +27,7 @@ protected:
 
 public:
 	explicit MyView(QWidget *parent = nullptr);
-	void setImage(const QImage &newImage);
+        void setImage(const QImage &image, const QRect &rect);
 	void setRdpInstance(freerdp *instance);
 
 	int scale() const;
@@ -37,7 +38,11 @@ private:
 	QPoint mapToRdp(const QPoint &pos) const;
 	template <typename T> QPoint mapToRdp(T const *e) const
 	{
-		return mapToRdp(e->position().toPoint());
+		if constexpr (std::is_same_v<T, QWheelEvent>) {
+			return mapToRdp(e->position().toPoint());
+		} else {
+			return mapToRdp(e->pos());
+		}
 	}
 private:
 	UINT16 qtToRdpMouseButton(Qt::MouseButton button);
